@@ -55,6 +55,39 @@ const PrettyJson = ({ data }: { data: File[] }) => (
   </Box>
 );
 
+// Command aliases mapping
+const commandAliases: Record<string, Commands> = {
+  list: 'list',
+  ls: 'list',
+  l: 'list',
+  show: 'list',
+  all: 'list',
+
+  info: 'info',
+  i: 'info',
+  'show-info': 'info',
+  details: 'info',
+  detail: 'info',
+  get: 'info',
+
+  delete: 'delete',
+  del: 'delete',
+  rm: 'delete',
+  remove: 'delete',
+  d: 'delete',
+
+  clean: 'clean',
+  cleanup: 'clean',
+  clear: 'clean',
+  c: 'clean',
+
+  version: 'version',
+  v: 'version',
+  '--version': 'version',
+  '-v': 'version',
+  ver: 'version'
+};
+
 function Cli({ command, args }: CliProps) {
   const [output, setOutput] = useState<string>('');
   const [error, setError] = useState<string>('');
@@ -132,13 +165,16 @@ function Cli({ command, args }: CliProps) {
         info: () => handleInfo(args),
         delete: () => handleDelete(args),
         clean: () => handleClean(args),
-
         version: () => {
           setOutput(`bun_uploader, version ${version} (${platform()})`);
         }
       };
 
-      if (!(command in commands)) return setError(`Unknown command '${command}'\nAvailable commands: ${Object.keys(commands).join(', ')}`);
+      if (!(command in commands)) {
+        const availableCommands = Object.keys(commandAliases).join(', ');
+        return setError(`Unknown command '${command}'\nAvailable commands: ${availableCommands}`);
+      }
+
       await commands[command]();
     };
 
@@ -183,6 +219,7 @@ function Cli({ command, args }: CliProps) {
 }
 
 const args = process.argv.slice(3);
-const command = process.argv[2] ?? 'version';
+const rawCommand = process.argv[2] ?? 'version';
+const resolvedCommand = commandAliases[rawCommand] || rawCommand;
 
-render(<Cli command={command as Commands} args={args} />);
+render(<Cli command={resolvedCommand as Commands} args={args} />);
