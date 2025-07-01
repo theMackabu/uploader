@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { APP_START_TIME } from '@/env';
+import { bearerAuth } from 'hono/bearer-auth';
+import { APP_START_TIME, ACCESS_KEY } from '@/env';
 
 import { z } from 'zod';
 import { version } from '#package';
@@ -78,7 +79,7 @@ cdn.get('/:id', async c => {
   return c.json(formatFile(file));
 });
 
-cdn.post('/:name', zValidator('query', UploadQuerySchema), async c => {
+cdn.post('/:name', bearerAuth({ token: ACCESS_KEY }), zValidator('query', UploadQuerySchema), async c => {
   const query = c.req.valid('query');
   const { name } = c.req.param();
 
