@@ -1,191 +1,108 @@
 import { Hono } from 'hono';
-import * as os from 'node:os';
-import { db } from '@/database';
-import { html } from 'hono/html';
-import { nanoid } from '@/helpers';
-import { port, appURL } from '@/config';
-import { writeFileSync, readFileSync } from 'fs';
+import { APP_START_TIME } from '@/env';
 
-const api = new Hono();
+import { z } from 'zod';
+import { version } from '#package';
+import { format } from 'timeago.js';
+import { nanoid, formatFile } from '@/helpers';
+import { zValidator } from '@hono/zod-validator';
+import { getFiles, getFile, getMetadata, createFile } from '@/database';
 
-const routesDocumentation = [
-	{ type: 'GET', name: 'health', url: '/cdn/health', param: '', body: '', info: 'get cdn status' },
-	{ type: 'GET', name: 'documentation', url: '/cdn/docs', param: '', body: '', info: 'read these docs' },
-	{ type: 'GET', name: 'file list', url: '/cdn/list', param: '', body: '', info: 'View all files on cdn' },
-	{ type: 'GET', name: 'file info', url: '/cdn/info', param: 'id', body: '', info: 'View info about a file' },
-	{ type: 'GET', name: 'download file', url: '/cdn', param: 'uuid/:name', body: '', info: 'Download file from cdn' },
-	{ type: 'POST', name: 'upload file', url: '/cdn/upload', param: 'name', body: '{arrayBuffer}', info: 'Upload file to cdn' },
-	{ type: 'GET', name: 'takedown page', url: '/cdn/takedown', param: '', body: '', info: 'takedown file page' },
-	{
-		type: 'POST',
-		name: 'takedown request',
-		url: '/cdn/takedown',
-		param: '',
-		body: '{id: string, name: string, reason: string}',
-		info: 'takedown request for file',
-	},
-];
+export const cdn = new Hono();
 
-api.get('/docs', (res) => {
-	return res.html(
-		html`<!DOCTYPE html> ${routesDocumentation.map((item) => {
-				return html` <p>
-					<b>(${item.type})</b> ${item.name} <b>[${item.url}${item.param && '/:' + item.param}] </b>
-					<span>${item.body ? 'body: ' + item.body : ''}</span>
-					<a href="${item.url}">goto</a><br />
-					<span>${item.info ? ' - ' + item.info : ''}</span>
-				</p>`;
-			})}`
-	);
+const ListQuerySchema = z.object({
+  search: z.string().default(''),
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  sortBy: z.enum(['date', 'name', 'size']).default('date'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc')
 });
 
-api.get('/list', (res) => {
-	const query = db.client.query(`SELECT * FROM files WHERE private = 0`).all();
-
-	return res.json({
-		files: query.map((data) => {
-			return {
-				name: data.name,
-				id: data.id,
-				download: data.url,
-				meta: {
-					date: data.date,
-					size: { formatted: `${Number((data.size / 1024).toFixed(3))}kb`, raw: Number(data.size) },
-				},
-			};
-		}),
-	});
+const UploadQuerySchema = z.object({
+  q: z.enum(['private', 'public']).default('public')
 });
 
-api.get('/info/:id', (res) => {
-	const { id } = res.req.param();
-	const query = db.client.query('SELECT * FROM files WHERE id = ?').all(id);
+cdn.get('/', zValidator('query', ListQuerySchema), async c => {
+  const query = c.req.valid('query');
+  const { filesList, totalCount, totalPages, page, limit, sortBy, sortOrder, search } = await getFiles(query);
 
-	return res.json(
-		query.length == 0
-			? { [id]: { message: 'Not Found', ok: false } }
-			: {
-					ok: true,
-					[id]: query.map((data) => {
-						return {
-							name: data.name,
-							id: data.id,
-							download: data.url,
-							meta: {
-								date: data.date,
-								size: { formatted: `${Number((data.size / 1024).toFixed(3))}kb`, raw: Number(data.size) },
-							},
-						};
-					}),
-			  }
-	);
+  return c.json({
+    files: filesList.map(formatFile),
+    pagination: {
+      page,
+      limit,
+      totalCount,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1
+    },
+    sorting: {
+      sortBy,
+      sortOrder
+    },
+    search: search || null
+  });
 });
 
-api.get('/:uuid/:name', (c) => {
-	const { uuid, name } = c.req.param();
-	const query = db.client.query('SELECT * FROM files WHERE id = $id AND name = $name').get({
-		$id: uuid,
-		$name: name,
-	});
+cdn.get('/health', c => {
+  const uptimeDate = new Date(APP_START_TIME);
 
-	c.header('Content-disposition', `attachment; filename=${query.name}`);
-
-	return c.body(readFileSync(`/var/www/cdn/files/${uuid}-${name}`), 200);
+  return c.json({
+    version,
+    uptime: Bun.nanoseconds(),
+    started_at: format(uptimeDate)
+  });
 });
 
-api.post('/upload/:name', async (c) => {
-	const body = await c.req.arrayBuffer();
-	const query = c.req.query('q');
-	const { name } = c.req.param();
-	const randomId = nanoid();
+cdn.get('/:id/:name', async c => {
+  const { id, name } = c.req.param();
 
-	writeFileSync(`/var/www/cdn/files/${randomId}-${name}`, Buffer.from(body));
+  const file = await getFile(id, name);
+  if (!file) return c.notFound();
 
-	if (query == 'private') {
-		db.client.exec(`INSERT INTO files (id, name, size, date, url, private) VALUES ($id, $name, $size, $date, $url, $private)`, {
-			$id: randomId,
-			$name: name,
-			$size: Buffer.from(body).toString().length,
-			$date: new Date(Date.now()).toISOString(),
-			$url: `${appURL}/${randomId}/${name}`,
-			$private: 1,
-		});
-	} else {
-		db.client.exec(`INSERT INTO files (id, name, size, date, url, private) VALUES ($id, $name, $size, $date, $url, $private)`, {
-			$id: randomId,
-			$name: name,
-			$size: Buffer.from(body).toString().length,
-			$date: new Date(Date.now()).toISOString(),
-			$url: `${appURL}/${randomId}/${name}`,
-			$private: 0,
-		});
-	}
+  const bunFile = Bun.file(`files/${id}-${name}`);
 
-	return c.json({
-		id: randomId,
-		private: query == 'private' ? true : false,
-		name: name,
-		size: Buffer.from(body).toString().length,
-		date: new Date(Date.now()).toISOString(),
-		url: `${appURL}/${randomId}/${name}`,
-	});
+  const exists = await bunFile.exists();
+  if (!exists) return c.notFound();
+
+  c.header('Content-disposition', `attachment; filename=${file.name}`);
+  return c.body(bunFile.stream(), 200);
 });
 
-api.get('/takedown', (res) => {
-	return res.html(
-		html`<!DOCTYPE html>
-			<form action="/cdn/takedown" method="post">
-				<div>
-					<label for="id">id: </label>
-					<input type="text" name="id" id="id" required />
-				</div>
-				<div>
-					<label for="name">name: </label>
-					<input type="text" name="name" id="name" required />
-				</div>
-				<div>
-					<label for="reason">reason: </label>
-					<input type="text" name="reason" id="reason" required />
-				</div>
-				<div>
-					<input type="submit" value="submit" />
-				</div>
-			</form>`
-	);
+cdn.get('/:id', async c => {
+  const { id } = c.req.param();
+
+  const file = await getMetadata(id);
+  if (!file) return c.notFound();
+
+  return c.json(formatFile(file));
 });
 
-api.post('/takedown', async (res) => {
-	const body = await res.req.text();
-	const data = JSON.parse('{"' + decodeURI(body).replace(/"/g, '\\"').replace(/&/g, '","').replace(/=/g, '":"') + '"}');
+cdn.post('/:name', zValidator('query', UploadQuerySchema), async c => {
+  const query = c.req.valid('query');
+  const { name } = c.req.param();
 
-	console.log(`takedown request for ${data.id}:${data.name}`);
-	db.client.exec(`INSERT INTO takedowns (id, name, reason) VALUES ($id, $name, $reason)`, {
-		$id: data.id,
-		$name: data.name,
-		$reason: data.reason,
-	});
+  const body = await c.req.arrayBuffer();
+  if (!body) return c.text('missing body :(', 401);
 
-	return res.json({ [data.id]: `submitted takedown request for: ${data.name}` });
+  const randomId = nanoid();
+  const isPrivate = query.q === 'private';
+  const filePath = `files/${randomId}-${name}`;
+
+  await Bun.write(filePath, body);
+
+  const bunFile = Bun.file(filePath);
+  const fileSize = bunFile.size;
+
+  const fileData = {
+    id: randomId,
+    name: name,
+    size: fileSize,
+    private: isPrivate
+  };
+
+  const createdFile = await createFile(fileData);
+  if (!createdFile) return c.text('failed entry :(', 500);
+
+  return c.json(formatFile(createdFile));
 });
-
-api.get('/health', (res) => {
-	return res.json({
-		port: port,
-		uptime: `${(os.uptime() / 86400).toFixed(2)}d`,
-		status: 'online',
-		timestamp: Date.now().toString(),
-		arch: os.arch(),
-		freemem: os.freemem(),
-		hostname: os.hostname(),
-		loadavg: os.loadavg(),
-		platform: os.platform(),
-		release: os.release(),
-		tmpdir: os.tmpdir(),
-		totalmem: os.totalmem(),
-		type: os.type(),
-		userInfo: os.userInfo(),
-		version: os.version(),
-	});
-});
-
-export { api };

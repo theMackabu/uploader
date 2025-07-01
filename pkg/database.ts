@@ -1,25 +1,96 @@
+import * as schema from '@/schema';
+
+import { Hono } from 'hono';
 import { Database } from 'bun:sqlite';
-import { existsSync, mkdirSync } from 'fs';
+import type { File } from '@/schema';
+
+import { drizzle } from 'drizzle-orm/bun-sqlite';
+import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
+import { count, like, asc, desc, eq, and } from 'drizzle-orm';
 
 const client = new Database('files.sqlite');
-const initialize = async (table: Array<string>) => {
-	table.map((name: string) => {
-		client.run(`CREATE TABLE IF NOT EXISTS ${name} (id TEXT, name TEXT, size TEXT, date TEXT, url TEXT, private INTEGER)`);
-		console.log(`initialized table ${name}`);
-	});
 
-	client.run(`CREATE TABLE IF NOT EXISTS takedowns (id TEXT, name TEXT, reason TEXT)`);
-	console.log(`initialized table takedowns`);
+export const db = drizzle({
+  schema,
+  client: client,
+  casing: 'snake_case'
+});
 
-	console.log('db init complete');
+export async function init() {
+  migrate(db, { migrationsFolder: './drizzle' });
 
-	if (!existsSync('/var/www/cdn/files')) {
-		mkdirSync('/var/www/cdn/files');
-		console.log('created file storage');
-	}
-};
+  const exists = await Bun.file('files').exists();
+  if (!exists) await Bun.write('files/.gitkeep', '');
 
-export const db = {
-	initialize,
-	client,
-};
+  return new Hono();
+}
+
+interface GetFiles {
+  search: string;
+  page: number;
+  limit: number;
+
+  sortOrder: 'asc' | 'desc';
+  sortBy: 'date' | 'name' | 'size';
+}
+
+export async function getFiles(query: GetFiles) {
+  const { page, limit, sortBy, sortOrder, search } = query;
+
+  const sortColumn = schema.files[sortBy] || schema.files.date;
+  const orderCondition = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
+  const whereCondition = search ? like(schema.files.name, `%${search}%`) : undefined;
+
+  const filesList = await db
+    .select()
+    .from(schema.files)
+    .where(whereCondition)
+    .orderBy(orderCondition)
+    .limit(limit)
+    .offset((page - 1) * limit);
+
+  const countResult = await db
+    .select({
+      totalCount: count()
+    })
+    .from(schema.files)
+    .where(whereCondition);
+
+  const totalCount = countResult.at(0)?.totalCount ?? 0;
+  const totalPages = Math.ceil(totalCount / limit);
+
+  return { filesList, totalCount, totalPages, ...query };
+}
+
+export async function getMetadata(id: string) {
+  const file = await db.select().from(schema.files).where(eq(schema.files.id, id)).limit(1);
+  return file.at(0) ?? null;
+}
+
+export async function getFile(id: string, name: string) {
+  const file = await db
+    .select({
+      id: schema.files.id,
+      name: schema.files.name
+    })
+    .from(schema.files)
+    .where(and(eq(schema.files.id, id), eq(schema.files.name, name)))
+    .limit(1);
+
+  return file.at(0) ?? null;
+}
+
+export async function createFile(file: Omit<File, 'date'>) {
+  const newFile = await db
+    .insert(schema.files)
+    .values({
+      id: file.id,
+      name: file.name,
+      size: file.size,
+      date: new Date(),
+      private: file.private
+    })
+    .returning();
+
+  return newFile.at(0) ?? null;
+}

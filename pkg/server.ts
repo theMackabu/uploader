@@ -1,20 +1,22 @@
-import { Hono } from "hono";
-import { api } from '@/routes';
-import { port } from '@/config';
-import { db } from '@/database';
+import { PORT } from '@/env';
+import { cdn } from '@/routes';
+import { init } from '@/database';
 import { logger } from 'hono/logger';
 
-const app = new Hono();
+const server = await init();
 
-app.use('*', logger());
-app.route('/', api);
+server.use(logger());
+server.route('/', cdn);
 
-app.notFound((res) => res.json({ message: 'Not Found', ok: false }, 404));
-app.onError((err, res) => {
-    console.error(err);
-    return res.json({ message: 'Internal Error', ok: false, error: err.message }, 500);
-})
+server.notFound(c => c.text('not found :(', 404));
 
-db.initialize(['files']).then(() => { console.log(`running at [::]:${port}`); });
+server.onError((err, res) => {
+  console.error(err);
+  return res.text(err.message, 500);
+});
 
-export default { port, fetch: app.fetch };
+export default {
+  port: PORT,
+  fetch: server.fetch,
+  development: false
+};

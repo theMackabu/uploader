@@ -1,17 +1,28 @@
 {
-	"version": "0.0.1",
-	"name": "uploader",
-	"devDependencies": {
-		"bun-types": "latest"
-	},
-	"dependencies": {
-		"hono": "^2.0.0",
-		"nanoid": "^4.0.0",
-		"typescript": "^4.8.4"
-	},
-	"scripts": {
-		"start": "bun run pkg/server.ts",
-		"cli": "bun run pkg/cli.ts"
-	},
-	"module": "pkg/server.js"
+  "version": "0.0.2",
+  "name": "uploader",
+  "scripts": {
+    "cli": "bun run pkg/cli.ts",
+    "start": "bun run pkg/server.ts",
+    "dev": "bun run --hot pkg/server.ts",
+    "generate": "bunx drizzle-kit generate",
+    "typecheck": "tsc",
+    "lint": "biome lint"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.7.0",
+    "drizzle-orm": "^0.44.2",
+    "hono": "^4.8.3",
+    "nanoid": "^5.1.5",
+    "timeago.js": "^4.0.2",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.6",
+    "@types/bun": "^1.2.17",
+    "bun-types": "latest",
+    "drizzle-kit": "^0.31.4",
+    "typescript": "^5.8.3"
+  },
+  "module": "pkg/server.js"
 }
