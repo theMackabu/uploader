@@ -138,6 +138,7 @@ function Cli({ command, args }: CliProps) {
         }
       };
 
+      if (!(command in commands)) return setError(`Unknown command '${command}'\nAvailable commands: ${Object.keys(commands).join(', ')}`);
       await commands[command]();
     };
 
