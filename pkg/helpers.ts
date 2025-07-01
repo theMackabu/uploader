@@ -21,7 +21,7 @@ export function formatFile(file: File) {
     fileName: decodeURIComponent(file.name),
     createdAt: file.date,
     metadata: {
-      url: `${APP_URL}/${file.id}/${file.name}`,
+      url: `${APP_URL}/${file.id}/${encodeURIComponent(file.name)}`,
       size: {
         raw: Number(file.size),
         formatted: formatFileSize(file.size)
