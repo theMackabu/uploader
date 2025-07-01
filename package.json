@@ -2,7 +2,7 @@
   "version": "0.0.2",
   "name": "uploader",
   "scripts": {
-    "cli": "bun run pkg/cli.ts",
+    "cli": "bun run pkg/cli.tsx",
     "start": "bun run pkg/server.ts",
     "dev": "bun run --hot pkg/server.ts",
     "generate": "bunx drizzle-kit generate",
@@ -11,9 +11,12 @@
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.0",
+    "@types/react": "^19.1.8",
     "drizzle-orm": "^0.44.2",
     "hono": "^4.8.3",
+    "ink": "^6.0.1",
     "nanoid": "^5.1.5",
+    "react": "^19.1.0",
     "timeago.js": "^4.0.2",
     "zod": "^3.25.67"
   },
