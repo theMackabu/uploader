@@ -1,6 +1,7 @@
 {
   "version": "0.0.2",
   "name": "uploader",
+  "license": "MIT",
   "scripts": {
     "cli": "bun run pkg/cli.tsx",
     "start": "bun run pkg/server.ts",
