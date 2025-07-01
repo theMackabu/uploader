@@ -65,7 +65,7 @@ cdn.get('/:id/:name', async c => {
   const exists = await bunFile.exists();
   if (!exists) return c.notFound();
 
-  c.header('Content-disposition', `attachment; filename=${file.name}`);
+  c.header('Content-disposition', `attachment; filename=${encodeURIComponent(file.name)}`);
   return c.body(bunFile.stream(), 200);
 });
 
