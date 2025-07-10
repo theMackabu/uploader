@@ -25,7 +25,7 @@ const UploadQuerySchema = z.object({
 
 cdn.get('/', zValidator('query', ListQuerySchema), async c => {
   const query = c.req.valid('query');
-  const hostname = c.req.header('host') ?? 'http://localhost:3000';
+  const hostname = `https://${c.req.header('host') ?? 'localhost:3000'}`;
   const { filesList, totalCount, totalPages, page, limit, sortBy, sortOrder, search } = await getFiles(query);
 
   return c.json({
@@ -73,7 +73,7 @@ cdn.get('/:id/:name', async c => {
 
 cdn.get('/:id', async c => {
   const { id } = c.req.param();
-  const hostname = c.req.header('host') ?? 'http://localhost:3000';
+  const hostname = `https://${c.req.header('host') ?? 'localhost:3000'}`;
 
   const file = await getMetadata(id);
   if (!file) return c.notFound();
@@ -84,7 +84,7 @@ cdn.get('/:id', async c => {
 cdn.post('/:name', bearerAuth({ token: ACCESS_KEY }), zValidator('query', UploadQuerySchema), async c => {
   const query = c.req.valid('query');
   const { name } = c.req.param();
-  const hostname = c.req.header('host') ?? 'http://localhost:3000';
+  const hostname = `https://${c.req.header('host') ?? 'localhost:3000'}`;
 
   const body = await c.req.arrayBuffer();
   if (!body) return c.text('missing body :(', 401);
