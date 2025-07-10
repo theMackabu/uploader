@@ -1,4 +1,3 @@
-import { APP_URL } from '@/env';
 import type { File } from '@/schema';
 import { customAlphabet } from 'nanoid';
 
@@ -15,13 +14,13 @@ export function formatFileSize(bytes: number) {
   return `${size}${sizes[i]}`;
 }
 
-export function formatFile(file: File) {
+export function formatFile(file: File, hostname: string) {
   return {
     id: file.id,
     fileName: decodeURIComponent(file.name),
     createdAt: file.date,
     metadata: {
-      url: `${APP_URL}/${file.id}/${encodeURIComponent(file.name)}`,
+      url: `${hostname}/${file.id}/${encodeURIComponent(file.name)}`,
       size: {
         raw: Number(file.size),
         formatted: formatFileSize(file.size)

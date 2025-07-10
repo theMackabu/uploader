@@ -25,10 +25,11 @@ const UploadQuerySchema = z.object({
 
 cdn.get('/', zValidator('query', ListQuerySchema), async c => {
   const query = c.req.valid('query');
+  const hostname = c.req.header('host') ?? 'http://localhost:3000';
   const { filesList, totalCount, totalPages, page, limit, sortBy, sortOrder, search } = await getFiles(query);
 
   return c.json({
-    files: filesList.map(formatFile),
+    files: filesList.map(file => formatFile(file, hostname)),
     pagination: {
       page,
       limit,
@@ -72,16 +73,18 @@ cdn.get('/:id/:name', async c => {
 
 cdn.get('/:id', async c => {
   const { id } = c.req.param();
+  const hostname = c.req.header('host') ?? 'http://localhost:3000';
 
   const file = await getMetadata(id);
   if (!file) return c.notFound();
 
-  return c.json(formatFile(file));
+  return c.json(formatFile(file, hostname));
 });
 
 cdn.post('/:name', bearerAuth({ token: ACCESS_KEY }), zValidator('query', UploadQuerySchema), async c => {
   const query = c.req.valid('query');
   const { name } = c.req.param();
+  const hostname = c.req.header('host') ?? 'http://localhost:3000';
 
   const body = await c.req.arrayBuffer();
   if (!body) return c.text('missing body :(', 401);
@@ -105,5 +108,5 @@ cdn.post('/:name', bearerAuth({ token: ACCESS_KEY }), zValidator('query', Upload
   const createdFile = await createFile(fileData);
   if (!createdFile) return c.text('failed entry :(', 500);
 
-  return c.json(formatFile(createdFile));
+  return c.json(formatFile(createdFile, hostname));
 });
