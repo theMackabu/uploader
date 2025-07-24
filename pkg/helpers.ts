@@ -21,6 +21,7 @@ export function formatFile(file: File, hostname: string) {
     createdAt: file.date,
     metadata: {
       url: `${hostname}/${file.id}/${encodeURIComponent(file.name)}`,
+      view: `${hostname}/${file.id}/${encodeURIComponent(file.name)}?content=inline`,
       size: {
         raw: Number(file.size),
         formatted: formatFileSize(file.size)
