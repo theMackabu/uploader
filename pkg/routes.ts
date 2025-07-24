@@ -20,8 +20,7 @@ const ListQuerySchema = z.object({
 });
 
 const ViewQuerySchema = z.object({
-  fileName: z.string().optional(),
-  attachment: z.enum(['view', 'download']).default('download')
+  a: z.enum(['v', 'd']).default('d')
 });
 
 const UploadQuerySchema = z.object({
@@ -73,7 +72,7 @@ cdn.get('/:id/:name', zValidator('query', ViewQuerySchema), async c => {
   const exists = await bunFile.exists();
   if (!exists) return c.notFound();
 
-  if (query.attachment === 'download') {
+  if (query.a === 'd') {
     c.header('Content-disposition', `attachment; filename=${encodeURIComponent(file.name)}`);
   }
 
