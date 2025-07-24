@@ -43,8 +43,9 @@ export async function getFiles(query: GetFiles) {
   const sortColumn = schema.files[sortBy] || schema.files.date;
   const orderCondition = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
 
-  const showPrivate = view === 'private';
+  const showPrivate = view === 'private' && accessToken === ACCESS_KEY;
   const conditions = [eq(schema.files.private, showPrivate)];
+
   if (search) conditions.push(like(schema.files.name, `%${search}%`));
 
   const filesList = await db
