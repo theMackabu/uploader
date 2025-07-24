@@ -13,6 +13,7 @@ export const cdn = new Hono();
 
 const ListQuerySchema = z.object({
   search: z.string().default(''),
+  accessToken: z.string().optional(),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(500).default(20),
   sortBy: z.enum(['date', 'name', 'size']).default('date'),

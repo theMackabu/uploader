@@ -1,6 +1,7 @@
 import * as schema from '@/schema';
 
 import { Hono } from 'hono';
+import { ACCESS_KEY } from '@/env';
 import { Database } from 'bun:sqlite';
 import type { File } from '@/schema';
 
@@ -29,18 +30,19 @@ interface GetFiles {
   search: string;
   page: number;
   limit: number;
+  accessToken?: string;
 
   sortOrder: 'asc' | 'desc';
   sortBy: 'date' | 'name' | 'size';
 }
 
 export async function getFiles(query: GetFiles) {
-  const { page, limit, sortBy, sortOrder, search } = query;
+  const { page, limit, sortBy, sortOrder, search, accessToken } = query;
 
   const sortColumn = schema.files[sortBy] || schema.files.date;
   const orderCondition = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
 
-  const conditions = [eq(schema.files.private, false)];
+  const conditions = [eq(schema.files.private, accessToken === ACCESS_KEY)];
   if (search) conditions.push(like(schema.files.name, `%${search}%`));
 
   const filesList = await db
