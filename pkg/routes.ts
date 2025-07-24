@@ -17,7 +17,8 @@ const ListQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(500).default(20),
   sortBy: z.enum(['date', 'name', 'size']).default('date'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc')
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  view: z.enum(['private', 'public']).default('public')
 });
 
 const ViewQuerySchema = z.object({

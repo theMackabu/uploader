@@ -34,15 +34,17 @@ interface GetFiles {
 
   sortOrder: 'asc' | 'desc';
   sortBy: 'date' | 'name' | 'size';
+  view: 'public' | 'private';
 }
 
 export async function getFiles(query: GetFiles) {
-  const { page, limit, sortBy, sortOrder, search, accessToken } = query;
+  const { page, limit, sortBy, sortOrder, search, accessToken, view } = query;
 
   const sortColumn = schema.files[sortBy] || schema.files.date;
   const orderCondition = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
 
-  const conditions = [eq(schema.files.private, accessToken === ACCESS_KEY)];
+  const showPrivate = view === 'private';
+  const conditions = [eq(schema.files.private, showPrivate)];
   if (search) conditions.push(like(schema.files.name, `%${search}%`));
 
   const filesList = await db
