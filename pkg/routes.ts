@@ -14,9 +14,14 @@ export const cdn = new Hono();
 const ListQuerySchema = z.object({
   search: z.string().default(''),
   page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
+  limit: z.coerce.number().min(1).max(500).default(20),
   sortBy: z.enum(['date', 'name', 'size']).default('date'),
   sortOrder: z.enum(['asc', 'desc']).default('desc')
+});
+
+const ViewQuerySchema = z.object({
+  attachment: z.boolean().default(true),
+  fileName: z.string().optional()
 });
 
 const UploadQuerySchema = z.object({
@@ -56,7 +61,8 @@ cdn.get('/health', c => {
   });
 });
 
-cdn.get('/:id/:name', async c => {
+cdn.get('/:id/:name', zValidator('query', ViewQuerySchema), async c => {
+  const query = c.req.valid('query');
   const { id, name } = c.req.param();
 
   const file = await getFile(id, name);
@@ -67,7 +73,7 @@ cdn.get('/:id/:name', async c => {
   const exists = await bunFile.exists();
   if (!exists) return c.notFound();
 
-  c.header('Content-disposition', `attachment; filename=${encodeURIComponent(file.name)}`);
+  if (query.attachment) c.header('Content-disposition', `attachment; filename=${encodeURIComponent(file.name)}`);
   return c.body(bunFile.stream(), 200);
 });
 

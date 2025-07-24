@@ -39,12 +39,14 @@ export async function getFiles(query: GetFiles) {
 
   const sortColumn = schema.files[sortBy] || schema.files.date;
   const orderCondition = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
-  const whereCondition = search ? like(schema.files.name, `%${search}%`) : undefined;
+
+  const conditions = [eq(schema.files.private, false)];
+  if (search) conditions.push(like(schema.files.name, `%${search}%`));
 
   const filesList = await db
     .select()
     .from(schema.files)
-    .where(whereCondition)
+    .where(and(...conditions))
     .orderBy(orderCondition)
     .limit(limit)
     .offset((page - 1) * limit);
@@ -54,7 +56,7 @@ export async function getFiles(query: GetFiles) {
       totalCount: count()
     })
     .from(schema.files)
-    .where(whereCondition);
+    .where(and(...conditions));
 
   const totalCount = countResult.at(0)?.totalCount ?? 0;
   const totalPages = Math.ceil(totalCount / limit);
