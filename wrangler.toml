@@ -1,0 +1,13 @@
+name = "cdn_library"
+main = "pkg/server.ts"
+compatibility_date = "2026-03-10"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cdn_metadata"
+database_id = "bf211d3b-e7f4-421f-9d7a-913a615c9b9a"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "cdn"

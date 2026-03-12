@@ -1,5 +1,16 @@
-export const APP_START_TIME = Date.now();
-export const PORT = parseInt(process.env.PORT || '3000', 10);
+import type { DrizzleD1Database } from 'drizzle-orm/d1';
+import type * as schema from '@/schema';
 
-// biome-ignore lint/style/noNonNullAssertion: ensure ACCESS_KEY exists
-export const ACCESS_KEY = process.env.ACCESS_KEY!;
+export type Bindings = {
+  DB: D1Database;
+  BUCKET: R2Bucket;
+  ACCESS_KEY: string;
+};
+
+export type Database = DrizzleD1Database<typeof schema>;
+
+let _appStartTime: number | null = null;
+export function getAppStartTime(): number {
+  if (_appStartTime === null) _appStartTime = Date.now();
+  return _appStartTime;
+}

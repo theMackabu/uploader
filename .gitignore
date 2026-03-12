@@ -4,6 +4,7 @@
 *.sql
 *.sqlite
 
-dist
-files
-node_modules
+/dist
+/files
+/node_modules
+/.wrangler

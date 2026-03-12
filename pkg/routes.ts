@@ -1,15 +1,24 @@
 import { Hono } from 'hono';
 import { bearerAuth } from 'hono/bearer-auth';
-import { APP_START_TIME, ACCESS_KEY } from '@/env';
+import { getAppStartTime } from '@/env';
+import type { Bindings, Database } from '@/env';
 
 import { z } from 'zod';
 import { version } from '#package';
 import { format } from 'timeago.js';
 import { nanoid, formatFile } from '@/helpers';
 import { zValidator } from '@hono/zod-validator';
-import { getFiles, getFile, getMetadata, createFile } from '@/database';
+import { getFiles, getFile, getMetadata, createFile, createDb } from '@/database';
 
-export const cdn = new Hono();
+type Env = { Bindings: Bindings; Variables: { db: Database } };
+
+export const cdn = new Hono<Env>();
+
+cdn.use('*', async (c, next) => {
+  const db = createDb(c.env.DB);
+  c.set('db', db);
+  await next();
+});
 
 const ListQuerySchema = z.object({
   search: z.string().default(''),
@@ -31,8 +40,13 @@ const UploadQuerySchema = z.object({
 
 cdn.get('/', zValidator('query', ListQuerySchema), async c => {
   const query = c.req.valid('query');
-  const { filesList, totalCount, totalPages, page, limit, sortBy, sortOrder, search } = await getFiles(query);
+  const db = c.get('db');
   const hostname = c.req.header('host') === 'themackabu.dev' ? 'https://themackabu.dev/cdn' : `https://${c.req.header('host')}`;
+
+  const { filesList, totalCount, totalPages, page, limit, sortBy, sortOrder, search } = await getFiles(db, {
+    ...query,
+    accessKey: c.env.ACCESS_KEY
+  });
 
   return c.json({
     files: filesList.map(file => formatFile(file, hostname)),
@@ -53,70 +67,78 @@ cdn.get('/', zValidator('query', ListQuerySchema), async c => {
 });
 
 cdn.get('/health', c => {
-  const uptimeDate = new Date(APP_START_TIME);
+  const uptimeDate = new Date(getAppStartTime());
 
   return c.json({
     version,
-    uptime: Bun.nanoseconds(),
     started_at: format(uptimeDate)
   });
 });
 
 cdn.get('/:id/:name', zValidator('query', ViewQuerySchema), async c => {
   const query = c.req.valid('query');
+  const db = c.get('db');
   const { id, name } = c.req.param();
 
-  const file = await getFile(id, name);
+  const file = await getFile(db, id, name);
   if (!file) return c.notFound();
 
-  const bunFile = Bun.file(`files/${id}-${name}`);
+  const object = await c.env.BUCKET.get(`${id}-${name}`);
+  if (!object) return c.notFound();
 
-  const exists = await bunFile.exists();
-  if (!exists) return c.notFound();
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
 
   if (query.content === 'attachment') {
-    c.header('Content-disposition', `attachment; filename=${encodeURIComponent(file.name)}`);
+    headers.set('Content-Disposition', `attachment; filename=${encodeURIComponent(file.name)}`);
   }
 
-  return c.body(bunFile.stream(), 200);
+  return new Response(object.body, { headers });
 });
 
 cdn.get('/:id', async c => {
   const { id } = c.req.param();
+  const db = c.get('db');
   const hostname = c.req.header('host') === 'themackabu.dev' ? 'https://themackabu.dev/cdn' : `https://${c.req.header('host')}`;
 
-  const file = await getMetadata(id);
+  const file = await getMetadata(db, id);
   if (!file) return c.notFound();
 
   return c.json(formatFile(file, hostname));
 });
 
-cdn.post('/:name', bearerAuth({ token: ACCESS_KEY }), zValidator('query', UploadQuerySchema), async c => {
-  const query = c.req.valid('query');
-  const { name } = c.req.param();
-  const hostname = c.req.header('host') === 'themackabu.dev' ? 'https://themackabu.dev/cdn' : `https://${c.req.header('host')}`;
+cdn.post(
+  '/:name',
+  async (c, next) => {
+    const auth = bearerAuth({ token: c.env.ACCESS_KEY });
+    return auth(c, next);
+  },
+  zValidator('query', UploadQuerySchema),
+  async c => {
+    const query = c.req.valid('query');
+    const db = c.get('db');
+    const { name } = c.req.param();
+    const hostname = c.req.header('host') === 'themackabu.dev' ? 'https://themackabu.dev/cdn' : `https://${c.req.header('host')}`;
 
-  const body = await c.req.arrayBuffer();
-  if (!body) return c.text('missing body :(', 401);
+    const body = await c.req.arrayBuffer();
+    if (!body) return c.text('missing body :(', 401);
 
-  const randomId = nanoid();
-  const isPrivate = query.q === 'private';
-  const filePath = `files/${randomId}-${name}`;
+    const randomId = nanoid();
+    const isPrivate = query.q === 'private';
+    const key = `${randomId}-${name}`;
 
-  await Bun.write(filePath, body);
+    await c.env.BUCKET.put(key, body);
 
-  const bunFile = Bun.file(filePath);
-  const fileSize = bunFile.size;
+    const fileData = {
+      id: randomId,
+      name: name,
+      size: body.byteLength,
+      private: isPrivate
+    };
 
-  const fileData = {
-    id: randomId,
-    name: name,
-    size: fileSize,
-    private: isPrivate
-  };
+    const createdFile = await createFile(db, fileData);
+    if (!createdFile) return c.text('failed entry :(', 500);
 
-  const createdFile = await createFile(fileData);
-  if (!createdFile) return c.text('failed entry :(', 500);
-
-  return c.json(formatFile(createdFile, hostname));
-});
+    return c.json(formatFile(createdFile, hostname));
+  }
+);

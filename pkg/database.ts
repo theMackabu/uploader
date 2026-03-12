@@ -1,29 +1,12 @@
 import * as schema from '@/schema';
-
-import { Hono } from 'hono';
-import { ACCESS_KEY } from '@/env';
-import { Database } from 'bun:sqlite';
 import type { File } from '@/schema';
+import type { Database, Bindings } from '@/env';
 
-import { drizzle } from 'drizzle-orm/bun-sqlite';
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
+import { drizzle } from 'drizzle-orm/d1';
 import { count, like, asc, desc, eq, and } from 'drizzle-orm';
 
-const client = new Database('files.sqlite');
-
-export const db = drizzle({
-  schema,
-  client: client,
-  casing: 'snake_case'
-});
-
-export async function init() {
-  migrate(db, { migrationsFolder: './drizzle' });
-
-  const exists = await Bun.file('files').exists();
-  if (!exists) await Bun.write('files/.gitkeep', '');
-
-  return new Hono();
+export function createDb(d1: D1Database): Database {
+  return drizzle(d1, { schema, casing: 'snake_case' });
 }
 
 interface GetFiles {
@@ -31,20 +14,21 @@ interface GetFiles {
   page: number;
   limit: number;
   accessToken?: string;
+  accessKey: string;
 
   sortOrder: 'asc' | 'desc';
   sortBy: 'date' | 'name' | 'size';
   view: 'public' | 'private';
 }
 
-export async function getFiles(query: GetFiles) {
-  const { page, limit, sortBy, sortOrder, search, accessToken, view } = query;
+export async function getFiles(db: Database, query: GetFiles) {
+  const { page, limit, sortBy, sortOrder, search, accessToken, accessKey, view } = query;
 
   const sortColumn = schema.files[sortBy] || schema.files.date;
   const orderCondition = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
 
   const decodedToken = accessToken ? decodeURIComponent(accessToken) : '';
-  const showPrivate = view === 'private' && decodedToken === ACCESS_KEY;
+  const showPrivate = view === 'private' && decodedToken === accessKey;
   const conditions = [eq(schema.files.private, showPrivate)];
 
   if (search) conditions.push(like(schema.files.name, `%${search}%`));
@@ -70,12 +54,12 @@ export async function getFiles(query: GetFiles) {
   return { filesList, totalCount, totalPages, ...query };
 }
 
-export async function getMetadata(id: string) {
+export async function getMetadata(db: Database, id: string) {
   const file = await db.select().from(schema.files).where(eq(schema.files.id, id)).limit(1);
   return file.at(0) ?? null;
 }
 
-export async function getFile(id: string, name: string) {
+export async function getFile(db: Database, id: string, name: string) {
   const file = await db
     .select({
       id: schema.files.id,
@@ -88,7 +72,7 @@ export async function getFile(id: string, name: string) {
   return file.at(0) ?? null;
 }
 
-export async function createFile(file: Omit<File, 'date'>) {
+export async function createFile(db: Database, file: Omit<File, 'date'>) {
   const newFile = await db
     .insert(schema.files)
     .values({

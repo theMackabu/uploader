@@ -3,30 +3,27 @@
   "name": "uploader",
   "license": "MIT",
   "scripts": {
-    "cli": "bun run pkg/cli.tsx",
-    "start": "bun run pkg/server.ts",
-    "dev": "bun run --hot pkg/server.ts",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
     "generate": "bunx drizzle-kit generate",
+    "migrate:local": "wrangler d1 migrations apply cdn_metadata --local",
+    "migrate:prod": "wrangler d1 migrations apply cdn_metadata --remote",
     "typecheck": "tsc",
     "lint": "biome lint"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.0",
-    "@types/react": "^19.1.8",
     "drizzle-orm": "^0.44.2",
     "hono": "^4.8.3",
-    "ink": "^6.0.1",
     "nanoid": "^5.1.5",
-    "react": "^19.1.0",
     "timeago.js": "^4.0.2",
     "zod": "^3.25.67"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.6",
-    "@types/bun": "^1.2.17",
-    "bun-types": "latest",
+    "@cloudflare/workers-types": "^4.20250312.0",
     "drizzle-kit": "^0.31.4",
-    "typescript": "^5.8.3"
-  },
-  "module": "pkg/server.js"
+    "typescript": "^5.8.3",
+    "wrangler": "^4.14.0"
+  }
 }
