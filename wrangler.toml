@@ -1,6 +1,12 @@
 name = "cdn_library"
 main = "pkg/server.ts"
+
+workers_dev = false
+preview_urls = false
 compatibility_date = "2026-03-10"
+
+[observability]
+enabled = true
 
 [[d1_databases]]
 binding = "DB"
