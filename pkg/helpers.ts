@@ -22,6 +22,7 @@ export function formatFile(file: File, hostname: string) {
     metadata: {
       url: `${hostname}/${file.id}/${encodeURIComponent(file.name)}`,
       view: `${hostname}/${file.id}/${encodeURIComponent(file.name)}?content=inline`,
+      cloudflare: `https://r2.themackabu.dev/${file.id}-${encodeURIComponent(file.name)}`,
       size: {
         raw: Number(file.size),
         formatted: formatFileSize(file.size)
